@@ -129,6 +129,8 @@ struct RenderedAudioCacheEntry
     juce::AudioBuffer<float> audio;
 };
 
+static constexpr size_t renderedAudioCacheMaxBytes = 256u * 1024u * 1024u;
+
 static juce::CriticalSection& getRenderedAudioCacheLock()
 {
     static juce::CriticalSection lock;
@@ -178,6 +180,22 @@ static bool loadRenderedAudioFromCache (const juce::String& key, juce::AudioBuff
     return false;
 }
 
+static size_t getRenderedAudioCacheEntryBytes (const RenderedAudioCacheEntry& entry)
+{
+    return (size_t) juce::jmax (0, entry.audio.getNumChannels())
+         * (size_t) juce::jmax (0, entry.audio.getNumSamples())
+         * sizeof (float);
+}
+
+static size_t getRenderedAudioCacheBytes (const std::vector<RenderedAudioCacheEntry>& cache)
+{
+    size_t bytes = 0;
+    for (auto& entry : cache)
+        bytes += getRenderedAudioCacheEntryBytes (entry);
+
+    return bytes;
+}
+
 static void storeRenderedAudioInCache (const juce::String& key, const juce::AudioBuffer<float>& audio)
 {
     const juce::ScopedLock scopedLock (getRenderedAudioCacheLock());
@@ -194,7 +212,8 @@ static void storeRenderedAudioInCache (const juce::String& key, const juce::Audi
     cache.push_back ({ key, {} });
     cache.back().audio.makeCopyOf (audio);
 
-    if (cache.size() > 48)
+    while (! cache.empty()
+           && (cache.size() > 48 || getRenderedAudioCacheBytes (cache) > renderedAudioCacheMaxBytes))
         cache.erase (cache.begin());
 }
 
@@ -226,7 +245,7 @@ static juce::File findBundledCsoundLibrary()
     return {};
 }
 
-static juce::String runProcess (const juce::StringArray& args, int& exitCode)
+static juce::String runProcess (const juce::StringArray& args, int& exitCode, int timeoutMs = 120000)
 {
     juce::ChildProcess process;
     exitCode = -1;
@@ -234,10 +253,37 @@ static juce::String runProcess (const juce::StringArray& args, int& exitCode)
     if (! process.start (args))
         return "Could not start process: " + args.joinIntoString (" ");
 
-    auto output = process.readAllProcessOutput();
-    process.waitForProcessToFinish (-1);
+    juce::MemoryOutputStream output;
+    char buffer[4096];
+    auto startTime = juce::Time::getMillisecondCounterHiRes();
+
+    while (process.isRunning())
+    {
+        auto bytesRead = process.readProcessOutput (buffer, (int) sizeof (buffer));
+        if (bytesRead > 0)
+            output.write (buffer, (size_t) bytesRead);
+        else
+            std::this_thread::sleep_for (std::chrono::milliseconds (5));
+
+        if (juce::Time::getMillisecondCounterHiRes() - startTime > (double) timeoutMs)
+        {
+            process.kill();
+            exitCode = -2;
+            return output.toString() + "\nProcess timed out: " + args.joinIntoString (" ");
+        }
+    }
+
+    for (;;)
+    {
+        auto bytesRead = process.readProcessOutput (buffer, (int) sizeof (buffer));
+        if (bytesRead <= 0)
+            break;
+
+        output.write (buffer, (size_t) bytesRead);
+    }
+
     exitCode = (int) process.getExitCode();
-    return output;
+    return output.toString();
 }
 
 static juce::String cIncludePath (const juce::File& file)

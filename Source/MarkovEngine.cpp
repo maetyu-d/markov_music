@@ -322,23 +322,14 @@ void MarkovEngine::renderAllStateLanes (int numSamples, int outputChannels)
 
     for (int stateIndex = 0; stateIndex < (int) stateLanes.size(); ++stateIndex)
     {
+        if (stateIndex != currentStateIndex && stateIndex != previousStateIndex)
+            continue;
+
         auto& scratch = *stateScratch[(size_t) stateIndex];
         if (scratch.getNumChannels() != outputChannels || scratch.getNumSamples() < numSamples)
             scratch.setSize (outputChannels, numSamples, false, false, true);
 
         scratch.clear (0, numSamples);
-
-        if (stateIndex != currentStateIndex && stateIndex != previousStateIndex)
-        {
-            bool hasOnlyDeferredLanes = true;
-            for (auto& lane : stateLanes[(size_t) stateIndex])
-                if (! isSuperColliderLane (lane))
-                    hasOnlyDeferredLanes = false;
-
-            if (hasOnlyDeferredLanes)
-                continue;
-        }
-
         renderStateLanesToBuffer (stateIndex, scratch, numSamples);
     }
 }
