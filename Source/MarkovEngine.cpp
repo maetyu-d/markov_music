@@ -850,71 +850,134 @@ int MarkovEngine::findStateIndex (const juce::String& id) const
 
 juce::String MarkovEngine::makeDemoScript()
 {
-    return R"TEXT(tempo 142
+    return R"TEXT(tempo 132
 
-state glass_room "Glass Room" 12
-  next acid_turn 45
-  next metal_break 25
-  next blue_fold 15
+state glass_room "Glass Room" 16
+  next acid_turn 42
+  next blue_fold 25
+  next metal_break 18
   next sleep_drift 15
   lane "Glass room" supercollider gain 0.78
     param freq 69
-    param amp 0.32
-    param cutoff 2600
+    param amp 0.30
+    param cutoff 2200
+    param duration 8
     code:
-      ({ var clock = Impulse.ar(7); var hats = HPF.ar(WhiteNoise.ar(Decay2.ar(Impulse.ar(13), 0.001, 0.025)), 5200) * 0.18; var kick = SinOsc.ar(47 + (Decay2.ar(clock, 0.001, 0.08) * 110)) * Decay2.ar(clock, 0.002, 0.13) * 0.9; var step = Demand.ar(clock, 0, Dseq([0, 0, 3, 7, 10, 7], inf)); var bass = RLPF.ar(Saw.ar(freq * (2 ** (step / 12))) * Decay2.ar(clock, 0.004, 0.22), cutoff, 0.22) * 0.42; var bell = SinOsc.ar((freq * 8) * (2 ** (Demand.ar(Impulse.ar(2.3), 0, Dseq([0, 3, 7, 10], inf)) / 12))) * Decay2.ar(Impulse.ar(2.3), 0.01, 0.7) * 0.16; (kick + hats + bass + bell) * amp }.value)
+      ({
+        var tick = Impulse.ar(8);
+        var soft = Impulse.ar(16);
+        var notes = Demand.ar(tick, 0, Dseq([0, 0, 3, 7, 10, 7, 3, -2], inf));
+        var melody = Demand.ar(Impulse.ar(2), 0, Dseq([12, 10, 7, 3, 5, 3, 0, -2], inf));
+        var kick = SinOsc.ar(46 + (Decay2.ar(tick, 0.001, 0.07) * 95)) * Decay2.ar(tick, 0.002, 0.11) * 0.72;
+        var rim = BPF.ar(WhiteNoise.ar, 2100, 0.5) * Decay2.ar(Impulse.ar(4, 0.5), 0.002, 0.045) * 0.20;
+        var hat = HPF.ar(WhiteNoise.ar, 6500) * Decay2.ar(soft, 0.001, 0.018) * 0.08;
+        var bass = RLPF.ar(Pulse.ar(freq * (2 ** (notes / 12)), 0.38), cutoff, 0.22) * Decay2.ar(tick, 0.004, 0.18) * 0.36;
+        var bell = SinOsc.ar(freq * 8 * (2 ** (melody / 12))) * Decay2.ar(Impulse.ar(2), 0.01, 0.55) * 0.13;
+        Pan2.ar((kick + rim + hat + bass + bell) * amp, SinOsc.kr(0.05) * 0.18)
+      }.value)
     endcode
 
-state acid_turn "Acid Turn" 8
-  next metal_break 50
+state acid_turn "Acid Turn" 12
+  next metal_break 45
+  next glass_room 25
   next blue_fold 20
-  next glass_room 20
   next sleep_drift 10
-  lane "Acid turn" supercollider gain 0.82
+  lane "Acid turn" supercollider gain 0.80
     param freq 82
-    param amp 0.34
+    param amp 0.31
     param cutoff 1900
+    param duration 8
     code:
-      ({ var kickTrig = Impulse.ar(8); var snareTrig = Impulse.ar(4, 0.5); var hatTrig = Impulse.ar(17); var kick = SinOsc.ar(52 + (Decay2.ar(kickTrig, 0.001, 0.07) * 130)) * Decay2.ar(kickTrig, 0.001, 0.1) * 0.95; var snare = BPF.ar(WhiteNoise.ar(Decay2.ar(snareTrig, 0.003, 0.08)), 1800, 0.45) * 0.42; var hats = HPF.ar(WhiteNoise.ar(Decay2.ar(hatTrig, 0.001, 0.018)), 6500) * 0.12; var step = Demand.ar(kickTrig, 0, Dseq([0, 0, 12, 3, 7, 5, 3, 0], inf)); var acid = RLPF.ar(Pulse.ar(freq * (2 ** (step / 12)), 0.42), cutoff + (Decay2.ar(kickTrig, 0.002, 0.16) * 3600), 0.16) * 0.33; (kick + snare + hats + acid) * amp }.value)
+      ({
+        var kickTrig = Impulse.ar(8);
+        var snareTrig = Impulse.ar(4, 0.5);
+        var hatTrig = Impulse.ar(16);
+        var step = Demand.ar(kickTrig, 0, Dseq([0, 0, 12, 3, 7, 5, 3, -2], inf));
+        var accent = Demand.ar(kickTrig, 0, Dseq([1, 0.35, 0.8, 0.45, 1, 0.5, 0.7, 0.4], inf));
+        var kick = SinOsc.ar(51 + (Decay2.ar(kickTrig, 0.001, 0.06) * 115)) * Decay2.ar(kickTrig, 0.001, 0.095) * 0.78;
+        var snare = BPF.ar(WhiteNoise.ar, 1700, 0.5) * Decay2.ar(snareTrig, 0.003, 0.07) * 0.30;
+        var hats = HPF.ar(WhiteNoise.ar, 7200) * Decay2.ar(hatTrig, 0.001, 0.014) * 0.075;
+        var acid = RLPF.ar(Pulse.ar(freq * (2 ** (step / 12)), 0.42),
+                           cutoff + (Decay2.ar(kickTrig, 0.002, 0.15) * 2800 * accent),
+                           0.15) * 0.34;
+        Pan2.ar((kick + snare + hats + acid) * amp, SinOsc.kr(0.08) * 0.12)
+      }.value)
     endcode
 
 state metal_break "Metal Break" 12
-  next acid_turn 40
-  next blue_fold 25
+  next acid_turn 38
+  next blue_fold 27
   next sleep_drift 20
   next glass_room 15
-  lane "Metal break" supercollider gain 0.80
+  lane "Metal break" supercollider gain 0.76
     param freq 104
-    param amp 0.33
-    param cutoff 3200
+    param amp 0.29
+    param cutoff 3000
+    param duration 8
     code:
-      ({ var kickTrig = Impulse.ar(5); var hitTrig = Impulse.ar(7); var hatTrig = Impulse.ar(19); var kick = SinOsc.ar(60 + (Decay2.ar(kickTrig, 0.001, 0.08) * 150)) * Decay2.ar(kickTrig, 0.002, 0.12) * 0.8; var hit = (BPF.ar(WhiteNoise.ar, 900, 0.35) + SinOsc.ar(190)) * Decay2.ar(hitTrig, 0.002, 0.075) * 0.44; var hats = HPF.ar(WhiteNoise.ar(Decay2.ar(hatTrig, 0.001, 0.015)), 7000) * 0.12; var step = Demand.ar(kickTrig, 0, Dseq([0, 7, 10, 3, 0, -2], inf)); var bass = RLPF.ar(Saw.ar(freq * (2 ** (step / 12))) * Decay2.ar(kickTrig, 0.005, 0.2), cutoff, 0.18) * 0.34; var minor = SinOsc.ar(freq * 5 * (2 ** (Demand.ar(Impulse.ar(2.5), 0, Dseq([0, 3, 10, 7], inf)) / 12))) * Decay2.ar(Impulse.ar(2.5), 0.01, 0.45) * 0.14; (kick + hit + hats + bass + minor) * amp }.value)
+      ({
+        var kickTrig = TDuty.ar(Dseq([0.5, 0.25, 0.25, 0.5, 0.75, 0.25], inf), 0, 1);
+        var hitTrig = Impulse.ar(6);
+        var hatTrig = Impulse.ar(18);
+        var step = Demand.ar(kickTrig, 0, Dseq([0, 7, 10, 3, 0, -2, 3, 7], inf));
+        var tune = Demand.ar(Impulse.ar(2), 0, Dseq([0, 3, 10, 7, 5, 3, -2, 0], inf));
+        var kick = SinOsc.ar(55 + (Decay2.ar(kickTrig, 0.001, 0.07) * 135)) * Decay2.ar(kickTrig, 0.002, 0.105) * 0.72;
+        var knock = (BPF.ar(WhiteNoise.ar, 950, 0.42) + SinOsc.ar(180)) * Decay2.ar(hitTrig, 0.002, 0.055) * 0.30;
+        var hats = HPF.ar(WhiteNoise.ar, 7600) * Decay2.ar(hatTrig, 0.001, 0.012) * 0.07;
+        var bass = RLPF.ar(Saw.ar(freq * (2 ** (step / 12))), cutoff, 0.20) * Decay2.ar(kickTrig, 0.004, 0.18) * 0.32;
+        var lead = SinOsc.ar(freq * 4 * (2 ** (tune / 12))) * Decay2.ar(Impulse.ar(2), 0.008, 0.42) * 0.11;
+        Pan2.ar((kick + knock + hats + bass + lead) * amp, SinOsc.kr(0.11) * 0.16)
+      }.value)
     endcode
 
-state blue_fold "Blue Fold" 10
-  next sleep_drift 40
-  next acid_turn 30
-  next glass_room 20
-  next metal_break 10
-  lane "Blue fold" supercollider gain 0.76
+state blue_fold "Blue Fold" 16
+  next sleep_drift 36
+  next acid_turn 28
+  next glass_room 24
+  next metal_break 12
+  lane "Blue fold" supercollider gain 0.74
     param freq 92
-    param amp 0.32
-    param cutoff 2400
+    param amp 0.30
+    param cutoff 2100
+    param duration 8
     code:
-      ({ var kickTrig = Impulse.ar(8); var clapTrig = Impulse.ar(4, 0.5); var hatTrig = Impulse.ar(16); var kick = SinOsc.ar(44 + (Decay2.ar(kickTrig, 0.001, 0.07) * 120)) * Decay2.ar(kickTrig, 0.002, 0.09) * 0.85; var clap = BPF.ar(WhiteNoise.ar(Decay2.ar(clapTrig, 0.004, 0.06)), 1500, 0.55) * 0.34; var hats = HPF.ar(WhiteNoise.ar(Decay2.ar(hatTrig, 0.001, 0.016)), 5600) * 0.11; var step = Demand.ar(kickTrig, 0, Dseq([0, 0, 5, 3, 10, 7, 3, -2], inf)); var bass = RLPF.ar(Pulse.ar(freq * (2 ** (step / 12)), 0.35) * Decay2.ar(kickTrig, 0.004, 0.18), cutoff, 0.2) * 0.33; var fall = SinOsc.ar(freq * 8 * (2 ** (Demand.ar(Impulse.ar(2), 0, Dseq([12, 10, 7, 3, 0], inf)) / 12))) * Decay2.ar(Impulse.ar(2), 0.01, 0.5) * 0.14; (kick + clap + hats + bass + fall) * amp }.value)
+      ({
+        var kickTrig = Impulse.ar(8);
+        var clapTrig = Impulse.ar(4, 0.5);
+        var hatTrig = Impulse.ar(12);
+        var step = Demand.ar(kickTrig, 0, Dseq([0, 0, 5, 3, 10, 7, 3, -2], inf));
+        var fall = Demand.ar(Impulse.ar(1.5), 0, Dseq([15, 14, 10, 7, 3, 0, -2, 3], inf));
+        var kick = SinOsc.ar(45 + (Decay2.ar(kickTrig, 0.001, 0.06) * 105)) * Decay2.ar(kickTrig, 0.002, 0.09) * 0.68;
+        var clap = BPF.ar(WhiteNoise.ar, 1450, 0.55) * Decay2.ar(clapTrig, 0.004, 0.055) * 0.24;
+        var hats = HPF.ar(WhiteNoise.ar, 5700) * Decay2.ar(hatTrig, 0.001, 0.018) * 0.075;
+        var bass = RLPF.ar(Pulse.ar(freq * (2 ** (step / 12)), 0.35), cutoff, 0.22) * Decay2.ar(kickTrig, 0.004, 0.19) * 0.31;
+        var glass = SinOsc.ar(freq * 6 * (2 ** (fall / 12))) * Decay2.ar(Impulse.ar(1.5), 0.012, 0.75) * 0.12;
+        Pan2.ar((kick + clap + hats + bass + glass) * amp, SinOsc.kr(0.04) * 0.22)
+      }.value)
     endcode
 
-state sleep_drift "Sleep Drift" 16
-  next glass_room 45
-  next blue_fold 25
-  next acid_turn 20
-  next metal_break 10
-  lane "Sleep drift" supercollider gain 0.68
+state sleep_drift "Sleep Drift" 20
+  next glass_room 44
+  next blue_fold 26
+  next acid_turn 18
+  next metal_break 12
+  lane "Sleep drift" supercollider gain 0.66
     param freq 69
-    param amp 0.28
-    param cutoff 1800
+    param amp 0.27
+    param cutoff 1600
+    param duration 8
     code:
-      ({ var tick = HPF.ar(WhiteNoise.ar(Decay2.ar(Impulse.ar(6), 0.001, 0.03)), 4200) * 0.12; var ghost = HPF.ar(WhiteNoise.ar(Decay2.ar(Impulse.ar(11), 0.001, 0.018)), 7600) * 0.06; var pulse = SinOsc.ar(freq * 0.5) * 0.18; var pad = RLPF.ar(Saw.ar([freq, freq * 1.505]) * 0.12, cutoff, 0.25).sum; var chime = SinOsc.ar(freq * 12 * (2 ** (Demand.ar(Impulse.ar(1.5), 0, Dseq([0, 3, 7, 10, 14], inf)) / 12))) * Decay2.ar(Impulse.ar(1.5), 0.01, 0.85) * 0.13; (tick + ghost + pulse + pad + chime) * amp }.value)
+      ({
+        var tick = Impulse.ar(6);
+        var ghost = Impulse.ar(11);
+        var chord = RLPF.ar(Saw.ar([freq * 0.5, freq * 0.75, freq * 1.5]) * 0.08, cutoff, 0.28).sum;
+        var pulse = SinOsc.ar(freq * 0.5) * 0.13;
+        var dust = HPF.ar(WhiteNoise.ar, 5200) * Decay2.ar(tick, 0.001, 0.028) * 0.07;
+        var ghostHat = HPF.ar(WhiteNoise.ar, 8200) * Decay2.ar(ghost, 0.001, 0.014) * 0.04;
+        var tune = Demand.ar(Impulse.ar(1.25), 0, Dseq([0, 3, 7, 10, 14, 10, 7, 3], inf));
+        var chime = SinOsc.ar(freq * 9 * (2 ** (tune / 12))) * Decay2.ar(Impulse.ar(1.25), 0.015, 0.9) * 0.10;
+        Pan2.ar((pulse + chord + dust + ghostHat + chime) * amp, SinOsc.kr(0.03) * 0.25)
+      }.value)
     endcode
 )TEXT";
 }

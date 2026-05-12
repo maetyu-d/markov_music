@@ -123,6 +123,81 @@ static bool shouldUseSuperColliderAu()
     return false;
 }
 
+struct RenderedAudioCacheEntry
+{
+    juce::String key;
+    juce::AudioBuffer<float> audio;
+};
+
+static juce::CriticalSection& getRenderedAudioCacheLock()
+{
+    static juce::CriticalSection lock;
+    return lock;
+}
+
+static std::vector<RenderedAudioCacheEntry>& getRenderedAudioCache()
+{
+    static std::vector<RenderedAudioCacheEntry> cache;
+    return cache;
+}
+
+static juce::String makeRenderedAudioCacheKey (const juce::String& language,
+                                               const LaneDefinition& lane,
+                                               const juce::File& executable,
+                                               double sampleRate,
+                                               int numChannels)
+{
+    juce::String key = language + "\n"
+                     + executable.getFullPathName() + "\n"
+                     + lane.code + "\n"
+                     + juce::String ((int) std::round (sampleRate)) + "\n"
+                     + juce::String (numChannels) + "\n";
+
+    auto paramKeys = lane.params.getAllKeys();
+    paramKeys.sort (true);
+
+    for (auto paramKey : paramKeys)
+        key += paramKey + "=" + lane.params.getValue (paramKey, {}) + "\n";
+
+    return key;
+}
+
+static bool loadRenderedAudioFromCache (const juce::String& key, juce::AudioBuffer<float>& destination)
+{
+    const juce::ScopedLock scopedLock (getRenderedAudioCacheLock());
+    auto& cache = getRenderedAudioCache();
+    for (auto& entry : cache)
+    {
+        if (entry.key == key)
+        {
+            destination.makeCopyOf (entry.audio);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void storeRenderedAudioInCache (const juce::String& key, const juce::AudioBuffer<float>& audio)
+{
+    const juce::ScopedLock scopedLock (getRenderedAudioCacheLock());
+    auto& cache = getRenderedAudioCache();
+    for (auto& entry : cache)
+    {
+        if (entry.key == key)
+        {
+            entry.audio.makeCopyOf (audio);
+            return;
+        }
+    }
+
+    cache.push_back ({ key, {} });
+    cache.back().audio.makeCopyOf (audio);
+
+    if (cache.size() > 48)
+        cache.erase (cache.begin());
+}
+
 static juce::File findBundledCsoundLibrary()
 {
 #if defined(MARKOV_BUNDLED_CSOUND_LIB)
@@ -1675,6 +1750,10 @@ private:
         auto defaultFreq = lane.params.getValue ("freq", "440").getFloatValue();
         auto defaultAmp = lane.params.getValue ("amp", "0.15").getFloatValue();
         auto defaultCutoff = lane.params.getValue ("cutoff", "3000").getFloatValue();
+        auto cacheKey = makeRenderedAudioCacheKey ("supercollider", lane, sclangExecutable, sampleRate, numChannels);
+
+        if (loadRenderedAudioFromCache (cacheKey, rendered))
+            return;
 
         auto scriptText = juce::String (R"SC(
 (
@@ -1726,6 +1805,7 @@ Score.recordNRT([
 
         rendered.setSize (juce::jmax (1, (int) reader->numChannels), (int) reader->lengthInSamples);
         reader->read (&rendered, 0, rendered.getNumSamples(), 0, true, true);
+        storeRenderedAudioInCache (cacheKey, rendered);
     }
 
     LaneDefinition lane;
