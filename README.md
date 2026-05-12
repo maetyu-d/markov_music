@@ -159,7 +159,7 @@ Cmajor lanes are written as `.cmajor` source. The adapter wraps the source in a 
 
 ChucK lanes render by writing a WAV with `WvOut2`. Use `{{output}}` in ChucK code for the generated output path. Rendered-lane templates support `{{freq}}`, `{{amp}}`, `{{cutoff}}`, and `{{duration}}` placeholders; the same names appear in the parameter selector and can be changed from Lua with `ctx:set`.
 
-SuperCollider lanes render through the installed `/Applications/SuperCollider.app/Contents/MacOS/sclang`. Lane code is treated as a SuperCollider audio-rate expression, with `freq`, `amp`, and `cutoff` available as SynthDef controls. The rendered WAV loop is read back into the JUCE engine.
+SuperCollider lanes render through the installed `/Applications/SuperCollider.app/Contents/MacOS/sclang`. Lane code is treated as a SuperCollider audio-rate expression, with `freq`, `amp`, and `cutoff` available as SynthDef controls. The rendered WAV loop is read back into the JUCE engine. The experimental SuperColliderAU live engine can be enabled with `MARKOV_SUPERCOLLIDER_AU=1`, but the stable renderer is the default because it avoids section-change gaps and silent AU starts.
 
 ## Language Adapter Plan
 

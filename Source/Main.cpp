@@ -2578,9 +2578,11 @@ private:
         reader->read (&buffer, 0, buffer.getNumSamples(), 0, true, true);
 
         auto peak = buffer.getMagnitude (0, buffer.getNumSamples());
-        std::cout << "Export smoke passed. File: " << output.getFullPathName()
+        auto passed = peak > 0.0001f;
+        std::cout << (passed ? "Export smoke passed. File: " : "Export smoke failed: silent file: ")
+                  << output.getFullPathName()
                   << " Peak: " << peak << std::endl;
-        std::exit (peak > 0.0f ? 0 : 3);
+        std::exit (passed ? 0 : 3);
     }
 
     std::unique_ptr<MainWindow> mainWindow;

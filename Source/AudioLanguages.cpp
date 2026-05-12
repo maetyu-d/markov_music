@@ -115,6 +115,14 @@ static juce::File findExecutableOnPath (const juce::String& executableName)
     return {};
 }
 
+static bool shouldUseSuperColliderAu()
+{
+    if (auto* value = std::getenv ("MARKOV_SUPERCOLLIDER_AU"))
+        return juce::String::fromUTF8 (value).trim() == "1";
+
+    return false;
+}
+
 static juce::File findBundledCsoundLibrary()
 {
 #if defined(MARKOV_BUNDLED_CSOUND_LIB)
@@ -1754,8 +1762,15 @@ public:
 
     void reset() override
     {
-        stopNode();
-        startSynth();
+        if (! ready)
+        {
+            startSynth();
+            return;
+        }
+
+        sendNodeSet ("freq", lane.params.getValue ("freq", "440").getFloatValue());
+        sendNodeSet ("amp", lane.params.getValue ("amp", "0.15").getFloatValue());
+        sendNodeSet ("cutoff", lane.params.getValue ("cutoff", "3000").getFloatValue());
     }
 
     bool setParameter (const juce::String& parameterId, float value) override
@@ -1926,9 +1941,7 @@ private:
 
         pumpPlugin (4);
         osc.send ("/d_load", juce::String (synthDefFile.getFullPathName()));
-        pumpPlugin (12);
-        stopNode();
-        pumpPlugin (4);
+        pumpPlugin (24);
         osc.send ("/s_new",
                   synthDefName,
                   nodeId,
@@ -1940,7 +1953,7 @@ private:
                   lane.params.getValue ("amp", "0.15").getFloatValue(),
                   juce::String ("cutoff"),
                   lane.params.getValue ("cutoff", "3000").getFloatValue());
-        pumpPlugin (12);
+        pumpPlugin (16);
         ready = true;
     }
 
@@ -2020,6 +2033,142 @@ private:
     std::unique_ptr<juce::AudioPluginInstance> plugin;
 };
 
+class SuperColliderProgram final : public AudioProgram
+{
+public:
+    SuperColliderProgram (LaneDefinition laneToUse, juce::File sclangExecutableToUse)
+        : lane (std::move (laneToUse)),
+          sclangExecutable (std::move (sclangExecutableToUse))
+    {
+    }
+
+    void prepare (double sampleRateToUse, int maxBlockSizeToUse, int numChannelsToUse) override
+    {
+        sampleRate = sampleRateToUse;
+        maxBlockSize = juce::jmax (1, maxBlockSizeToUse);
+        numChannels = juce::jmax (1, numChannelsToUse);
+        lastError.clear();
+        usingFallback = false;
+
+        liveProgram = std::make_unique<SuperColliderAuProgram> (lane, sclangExecutable);
+        liveProgram->prepare (sampleRate, maxBlockSize, numChannels);
+        liveProgram->reset();
+
+        if (programProducesAudio (*liveProgram))
+        {
+            liveProgram->reset();
+            renderedProgram.reset();
+            return;
+        }
+
+        liveDescription = liveProgram->describe();
+        liveProgram->releaseResources();
+        liveProgram.reset();
+
+        renderedProgram = std::make_unique<SuperColliderRenderedProgram> (lane, sclangExecutable);
+        renderedProgram->prepare (sampleRate, maxBlockSize, numChannels);
+        renderedProgram->reset();
+        usingFallback = true;
+
+        if (! programProducesAudio (*renderedProgram))
+            lastError = "SuperCollider produced silence. " + renderedProgram->describe();
+
+        renderedProgram->reset();
+    }
+
+    void reset() override
+    {
+        if (auto* active = getActiveProgram())
+            active->reset();
+    }
+
+    bool setParameter (const juce::String& parameterId, float value) override
+    {
+        auto id = parameterId.trim().toLowerCase();
+
+        if (id == "gain")
+            lane.gain = juce::jlimit (0.0f, 1.5f, value);
+        else if (id == "freq" || id == "amp" || id == "cutoff" || id == "duration")
+            lane.params.set (id, juce::String (value, 6));
+
+        if (auto* active = getActiveProgram())
+            return active->setParameter (parameterId, value);
+
+        return id == "gain" || id == "freq" || id == "amp" || id == "cutoff" || id == "duration";
+    }
+
+    juce::Array<AudioParameterInfo> getParameters() const override
+    {
+        return makeRenderedLaneParameters (lane);
+    }
+
+    void render (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) override
+    {
+        if (auto* active = getActiveProgram())
+            active->render (buffer, startSample, numSamples);
+    }
+
+    void releaseResources() override
+    {
+        if (liveProgram != nullptr)
+            liveProgram->releaseResources();
+
+        if (renderedProgram != nullptr)
+            renderedProgram->releaseResources();
+    }
+
+    juce::String describe() const override
+    {
+        if (lastError.isNotEmpty())
+            return lastError;
+
+        if (usingFallback && renderedProgram != nullptr)
+            return "SuperCollider rendered fallback; live AU was silent. " + renderedProgram->describe();
+
+        if (liveProgram != nullptr)
+            return liveProgram->describe();
+
+        return liveDescription.isNotEmpty() ? liveDescription : "SuperCollider starting";
+    }
+
+private:
+    AudioProgram* getActiveProgram() const
+    {
+        if (usingFallback)
+            return renderedProgram.get();
+
+        return liveProgram.get();
+    }
+
+    bool programProducesAudio (AudioProgram& program)
+    {
+        auto channels = juce::jmax (2, numChannels);
+        auto probeSamples = juce::jlimit (maxBlockSize, (int) std::round (sampleRate * 1.0), maxBlockSize * 96);
+        juce::AudioBuffer<float> probe (channels, probeSamples);
+        probe.clear();
+
+        for (int offset = 0; offset < probeSamples; offset += maxBlockSize)
+        {
+            auto block = juce::jmin (maxBlockSize, probeSamples - offset);
+            program.render (probe, offset, block);
+        }
+
+        return juce::jmax (probe.getMagnitude (0, probeSamples),
+                           channels > 1 ? probe.getMagnitude (1, probeSamples) : 0.0f) > 0.0001f;
+    }
+
+    LaneDefinition lane;
+    juce::File sclangExecutable;
+    juce::String lastError;
+    juce::String liveDescription;
+    double sampleRate = 44100.0;
+    int maxBlockSize = 512;
+    int numChannels = 2;
+    bool usingFallback = false;
+    std::unique_ptr<AudioProgram> liveProgram;
+    std::unique_ptr<AudioProgram> renderedProgram;
+};
+
 class SuperColliderHost final : public AudioLanguageHost
 {
 public:
@@ -2035,7 +2184,10 @@ public:
         }
 
         error.clear();
-        return std::make_unique<SuperColliderAuProgram> (lane, sclang);
+        if (! shouldUseSuperColliderAu())
+            return std::make_unique<SuperColliderRenderedProgram> (lane, sclang);
+
+        return std::make_unique<SuperColliderProgram> (lane, sclang);
     }
 };
 
