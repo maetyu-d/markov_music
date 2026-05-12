@@ -155,9 +155,9 @@ Open, Save, and Snapshot in the header work with `.markov.json` project files. S
 
 Csound lanes can be written as an instrument body or as a complete `.csd`. Instrument-body lanes are wrapped with a default Csound document, a sine table, and a score event for instrument 1. Add a lane `params.duration` value to choose the offline render length in seconds; otherwise the loop renders 16 seconds.
 
-Cmajor lanes are written as `.cmajor` source. The adapter wraps the source in a temporary `.cmajorpatch`, calls `cmaj render`, reads the WAV output, and loops it inside the JUCE audio engine. Add a lane `params.duration` value to choose the offline render length in seconds; otherwise the loop renders 8 seconds.
+Cmajor lanes are written as `.cmajor` source. The native adapter compiles lane DSP for live playback when available; the rendered fallback reads a WAV loop into the JUCE audio engine and caches unchanged renders in memory.
 
-ChucK lanes render by writing a WAV with `WvOut2`. Use `{{output}}` in ChucK code for the generated output path. Rendered-lane templates support `{{freq}}`, `{{amp}}`, `{{cutoff}}`, and `{{duration}}` placeholders; the same names appear in the parameter selector and can be changed from Lua with `ctx:set`.
+ChucK lanes use the embedded VM when available; the rendered fallback writes a WAV with `WvOut2`. Use `{{output}}` in rendered ChucK code for the generated output path. Rendered-lane templates support `{{freq}}`, `{{amp}}`, `{{cutoff}}`, and `{{duration}}` placeholders; the same names appear in the parameter selector and can be changed from Lua with `ctx:set`. Unchanged rendered ChucK loops are cached in memory.
 
 SuperCollider lanes render through the installed `/Applications/SuperCollider.app/Contents/MacOS/sclang`. Lane code is treated as a SuperCollider audio-rate expression, with `freq`, `amp`, and `cutoff` available as SynthDef controls. The rendered WAV loop is read back into the JUCE engine and cached in memory, so loaded nodes can start immediately without rerendering unchanged code. The experimental SuperColliderAU live engine can be enabled with `MARKOV_SUPERCOLLIDER_AU=1`, but the stable renderer is the default because it avoids section-change gaps and silent AU starts.
 

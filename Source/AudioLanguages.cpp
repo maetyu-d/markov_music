@@ -841,6 +841,10 @@ private:
         lastError.clear();
         rendered.setSize (numChannels, 0);
 
+        auto cacheKey = makeRenderedAudioCacheKey ("cmajor", lane, cmajExecutable, sampleRate, numChannels);
+        if (loadRenderedAudioFromCache (cacheKey, rendered))
+            return;
+
         auto workingDir = juce::File::getSpecialLocation (juce::File::tempDirectory)
                               .getNonexistentChildFile ("markov-cmajor-lane", {});
 
@@ -910,6 +914,7 @@ private:
 
         rendered.setSize (juce::jmax (1, (int) reader->numChannels), (int) reader->lengthInSamples);
         reader->read (&rendered, 0, rendered.getNumSamples(), 0, true, true);
+        storeRenderedAudioInCache (cacheKey, rendered);
     }
 
     LaneDefinition lane;
@@ -1416,6 +1421,10 @@ private:
         lastError.clear();
         rendered.setSize (numChannels, 0);
 
+        auto cacheKey = makeRenderedAudioCacheKey ("chuck", lane, chuckExecutable, sampleRate, numChannels);
+        if (loadRenderedAudioFromCache (cacheKey, rendered))
+            return;
+
         auto workingDir = juce::File::getSpecialLocation (juce::File::tempDirectory)
                               .getNonexistentChildFile ("markov-chuck-lane", {});
 
@@ -1460,6 +1469,7 @@ private:
 
         rendered.setSize (juce::jmax (1, (int) reader->numChannels), (int) reader->lengthInSamples);
         reader->read (&rendered, 0, rendered.getNumSamples(), 0, true, true);
+        storeRenderedAudioInCache (cacheKey, rendered);
     }
 
     LaneDefinition lane;
