@@ -157,7 +157,7 @@ Csound lanes can be written as an instrument body or as a complete `.csd`. Instr
 
 Cmajor lanes are written as `.cmajor` source. The native adapter compiles lane DSP for live playback when available; the rendered fallback reads a WAV loop into the JUCE audio engine and caches unchanged renders in memory.
 
-ChucK lanes use the embedded VM when available; the rendered fallback writes a WAV with `WvOut2`. Use `{{output}}` in rendered ChucK code for the generated output path. Rendered-lane templates support `{{freq}}`, `{{amp}}`, `{{cutoff}}`, and `{{duration}}` placeholders; the same names appear in the parameter selector and can be changed from Lua with `ctx:set`. Unchanged rendered ChucK loops are cached in memory.
+ChucK lanes run as live embedded VMs when the bundled ChucK core is available. Lane code can read `global float markov_freq`, `markov_amp`, `markov_cutoff`, and `markov_duration`; Lua/control changes update those globals without restarting the VM. The rendered fallback writes a WAV with `WvOut2`; use `{{output}}` in rendered ChucK code for the generated output path. Rendered-lane templates support `{{freq}}`, `{{amp}}`, `{{cutoff}}`, and `{{duration}}` placeholders. Unchanged rendered ChucK loops are cached in memory.
 
 SuperCollider lanes render through the installed `/Applications/SuperCollider.app/Contents/MacOS/sclang`. Lane code is treated as a SuperCollider audio-rate expression, with `freq`, `amp`, and `cutoff` available as SynthDef controls. The rendered WAV loop is read back into the JUCE engine and cached in memory, so loaded nodes can start immediately without rerendering unchanged code. The experimental SuperColliderAU live engine can be enabled with `MARKOV_SUPERCOLLIDER_AU=1`, but the stable renderer is the default because it avoids section-change gaps and silent AU starts.
 
@@ -168,7 +168,7 @@ SuperCollider lanes render through the installed `/Applications/SuperCollider.ap
 | Faust | Audio-rate DSP lanes | Compile Faust DSP to C++/LLVM/WASM and wrap as `AudioProgram`. |
 | Cmajor | Audio-rate DSP lanes | Active via project-local `cmaj render` to loop; later upgrade path is embedded performer/libCmajPerformer. |
 | Csound | Synthesis/effects lanes | Active via project-local Csound CLI render-to-loop; later upgrade path is embedded libcsound for live control. |
-| ChucK | Timed procedural lanes | Active via project-local ChucK CLI render-to-loop using `WvOut2`; later upgrade path is hosted VM instances. |
+| ChucK | Timed procedural lanes | Active as embedded live ChucK VMs with CLI render fallback. |
 | RTcmix | Score/instrument lanes | Prefer external process or library adapter depending on availability. |
 | SuperCollider | Generative synth lanes | Active via installed `sclang` non-realtime render to loop; later upgrade path is `scsynth`/SuperColliderAU hosting for live control. |
 | Lua | Control | Embed Lua VM for deterministic transition and parameter scripts. |

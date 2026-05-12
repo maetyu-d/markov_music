@@ -1514,7 +1514,13 @@ public:
 
             void reset() override
             {
-                startVm();
+                if (! started)
+                {
+                    startVm();
+                    return;
+                }
+
+                applyLaneGlobals();
             }
 
             bool setParameter (const juce::String& parameterId, float value) override
@@ -1611,6 +1617,11 @@ public:
                 }
 
                 started = true;
+                applyLaneGlobals();
+            }
+
+            void applyLaneGlobals()
+            {
                 setGlobal ("freq", lane.params.getValue ("freq", "440").getFloatValue());
                 setGlobal ("amp", lane.params.getValue ("amp", "0.2").getFloatValue());
                 setGlobal ("cutoff", lane.params.getValue ("cutoff", "1400").getFloatValue());

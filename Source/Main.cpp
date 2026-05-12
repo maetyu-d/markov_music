@@ -2506,10 +2506,14 @@ private:
         program->prepare (48000.0, 512, 2);
         program->reset();
         program->setParameter ("freq", 660.0f);
-        program->render (buffer, 0, 48000);
+        program->render (buffer, 0, 24000);
+        program->setParameter ("freq", 330.0f);
+        program->setParameter ("amp", 0.1f);
+        program->render (buffer, 24000, 24000);
 
         auto peak = juce::jmax (buffer.getMagnitude (0, 48000), buffer.getMagnitude (1, 48000));
-        std::cout << "ChucK smoke passed. Peak: " << peak << std::endl;
+        std::cout << "ChucK smoke passed. Peak: " << peak << "\n"
+                  << program->describe() << std::endl;
         std::exit (peak > 0.0f ? 0 : 2);
     }
 
