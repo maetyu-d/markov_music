@@ -17,6 +17,8 @@ class MainComponent final : public juce::AudioAppComponent,
 
 public:
     MainComponent()
+        : laneCodeEditor (laneCodeDocument, &laneCodeTokeniser),
+          scriptEditor (scriptDocument, &scriptTokeniser)
     {
         configureWindow();
         configureMap();
@@ -55,6 +57,18 @@ public:
 
     bool keyPressed (const juce::KeyPress& key, juce::Component*) override
     {
+        if (editMode
+            && key.getKeyCode() == juce::KeyPress::returnKey
+            && key.getModifiers().isCommandDown())
+        {
+            if (laneCodeEditor.hasKeyboardFocus (true))
+                applySelectedLaneEdits();
+            else
+                applyScript();
+
+            return true;
+        }
+
         if (key == juce::KeyPress::escapeKey && editMode)
         {
             showMapView();
@@ -204,7 +218,7 @@ public:
         editorArea.removeFromTop (14);
         songScriptLabel.setBounds (editorArea.removeFromTop (24));
         editorArea.removeFromTop (6);
-        script.setBounds (editorArea);
+        scriptEditor.setBounds (editorArea);
         updatePresentationMode();
     }
 
@@ -273,7 +287,6 @@ private:
 
         configureTextEditor (laneNameEditor, "Instrument name");
         configureSlider (laneGainSlider, 0.0, 1.5, 0.01);
-        configureTextEditor (laneCodeEditor, "Sound code", true, false, true);
         configureCodeEditor (laneCodeEditor);
     }
 
@@ -292,13 +305,12 @@ private:
     void configureProjectEditors()
     {
         configureTextEditor (laneInspector, {}, true, true, false);
-        configureTextEditor (script, {}, true, false, true);
-        configureCodeEditor (script);
+        configureCodeEditor (scriptEditor);
         configureSectionLabel (mapLabel, "Map");
         configureSectionLabel (inspectorLabel, "Runtime");
         configureSectionLabel (laneCodeLabel, "Lane Code");
         configureSectionLabel (songScriptLabel, "Song Code");
-        script.setText (MarkovEngine::makeDemoScript());
+        setScriptText (MarkovEngine::makeDemoScript());
     }
 
     void configureButtons()
@@ -344,7 +356,7 @@ private:
         juce::String error;
         {
             const juce::ScopedLock lock (audioLock);
-            engine.loadFromScript (script.getText(), languageRegistry, error);
+            engine.loadFromScript (getScriptText(), languageRegistry, error);
         }
         refreshProjectView();
         startTimerHz (8);
@@ -403,15 +415,54 @@ private:
         addAndMakeVisible (editor);
     }
 
-    void configureCodeEditor (juce::TextEditor& editor)
+    void configureCodeEditor (juce::CodeEditorComponent& editor)
     {
-        editor.setFont (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 15.0f, juce::Font::plain));
-        editor.setIndents (12, 10);
-        editor.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff0d1116));
-        editor.setColour (juce::TextEditor::outlineColourId, juce::Colour (0xff33404a));
-        editor.setColour (juce::TextEditor::focusedOutlineColourId, juce::Colour (0xff6fb4dc));
-        editor.setColour (juce::TextEditor::highlightColourId, juce::Colour (0x663a7fa2));
-        editor.setColour (juce::CaretComponent::caretColourId, juce::Colour (0xffeacb64));
+        editor.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 15.0f, juce::Font::plain)));
+        editor.setTabSize (2, true);
+        editor.setLineNumbersShown (true);
+        editor.setScrollbarThickness (10);
+        editor.setColour (juce::CodeEditorComponent::backgroundColourId, juce::Colour (0xff0d1116));
+        editor.setColour (juce::CodeEditorComponent::defaultTextColourId, juce::Colour (0xffd9e3ea));
+        editor.setColour (juce::CodeEditorComponent::highlightColourId, juce::Colour (0x663a7fa2));
+        editor.setColour (juce::CodeEditorComponent::lineNumberBackgroundId, juce::Colour (0xff111820));
+        editor.setColour (juce::CodeEditorComponent::lineNumberTextId, juce::Colour (0xff6f7c86));
+        editor.addKeyListener (this);
+
+        juce::CodeEditorComponent::ColourScheme scheme;
+        scheme.set ("Error", juce::Colour (0xffff6d6d));
+        scheme.set ("Comment", juce::Colour (0xff71808c));
+        scheme.set ("Keyword", juce::Colour (0xff88c0d0));
+        scheme.set ("Operator", juce::Colour (0xffd8dee9));
+        scheme.set ("Identifier", juce::Colour (0xffd9e3ea));
+        scheme.set ("Integer", juce::Colour (0xffeacb64));
+        scheme.set ("Float", juce::Colour (0xffeacb64));
+        scheme.set ("String", juce::Colour (0xffa3be8c));
+        scheme.set ("Bracket", juce::Colour (0xffd8dee9));
+        scheme.set ("Punctuation", juce::Colour (0xffaeb9c3));
+        scheme.set ("Preprocessor Text", juce::Colour (0xffb48ead));
+        editor.setColourScheme (scheme);
+
+        addAndMakeVisible (editor);
+    }
+
+    juce::String getScriptText() const
+    {
+        return scriptDocument.getAllContent();
+    }
+
+    void setScriptText (const juce::String& text)
+    {
+        scriptEditor.loadContent (text);
+    }
+
+    juce::String getLaneCodeText() const
+    {
+        return laneCodeDocument.getAllContent();
+    }
+
+    void setLaneCodeText (const juce::String& text)
+    {
+        laneCodeEditor.loadContent (text);
     }
 
     void configureSectionLabel (juce::Label& label, const juce::String& text)
@@ -444,7 +495,7 @@ private:
                  &newLaneLanguageSelector, &laneTemplateSelector, &laneLanguageSelector,
                  &laneNameEditor, &laneGainSlider, &laneMuteButton, &laneCodeEditor,
                  &transitionSelector, &transitionTargetSelector, &transitionWeightSlider,
-                 &durationSlider, &tempoSlider, &script,
+                 &durationSlider, &tempoSlider, &scriptEditor,
                  &mapLabel, &inspectorLabel, &laneCodeLabel, &songScriptLabel,
                  &applyButton, &demoButton, &addStateButton, &addLaneButton,
                  &applyLaneButton, &duplicateLaneButton, &deleteLaneButton,
@@ -476,7 +527,7 @@ private:
     {
         if (button == &demoButton)
         {
-            script.setText (MarkovEngine::makeDemoScript(), juce::dontSendNotification);
+            setScriptText (MarkovEngine::makeDemoScript());
             applyScript();
         }
         else if (button == &applyButton)
@@ -649,7 +700,7 @@ private:
 
     void applyScript()
     {
-        loadScriptInBackground (script.getText(),
+        loadScriptInBackground (getScriptText(),
                                 "Preparing song...",
                                 stateSelector.getSelectedId(),
                                 laneSelector.getSelectedId(),
@@ -783,7 +834,7 @@ private:
         if (MarkovEngine::scriptToJson (text, root, error))
             visibleText = MarkovEngine::jsonToReadableScript (root);
 
-        script.setText (visibleText, juce::dontSendNotification);
+        setScriptText (visibleText);
         loadScriptInBackground (visibleText,
                                 successMessage.isNotEmpty() ? successMessage : "Preparing song...",
                                 stateSelector.getSelectedId(),
@@ -942,7 +993,7 @@ private:
     {
         juce::var root;
         juce::String error;
-        if (! MarkovEngine::scriptToJson (script.getText(), root, error))
+        if (! MarkovEngine::scriptToJson (getScriptText(), root, error))
         {
             status.setText ("The song was not saved:\n" + error, juce::dontSendNotification);
             return;
@@ -961,7 +1012,7 @@ private:
     {
         juce::var root;
         juce::String error;
-        if (! MarkovEngine::scriptToJson (script.getText(), root, error))
+        if (! MarkovEngine::scriptToJson (getScriptText(), root, error))
             status.setText ("That edit needs a small fix:\n" + error, juce::dontSendNotification);
 
         return root;
@@ -969,7 +1020,7 @@ private:
 
     void showProjectSource (const juce::var& root)
     {
-        script.setText (MarkovEngine::jsonToReadableScript (root), juce::dontSendNotification);
+        setScriptText (MarkovEngine::jsonToReadableScript (root));
     }
 
     void exportAudioSnapshot()
@@ -990,7 +1041,7 @@ private:
             file = file.withFileExtension (".wav");
 
         juce::String error;
-        if (! renderScriptToWav (script.getText(), file, languageRegistry, 60.0, error))
+        if (! renderScriptToWav (getScriptText(), file, languageRegistry, 60.0, error))
         {
             status.setText ("The audio export did not finish:\n" + error, juce::dontSendNotification);
             return;
@@ -1094,7 +1145,7 @@ private:
     {
         const juce::ScopedValueSetter<bool> guard (updatingParameterControls, true);
         laneNameEditor.clear();
-        laneCodeEditor.clear();
+        setLaneCodeText ({});
         laneLanguageSelector.setText ({}, juce::dontSendNotification);
         laneGainSlider.setValue (0.0, juce::dontSendNotification);
         laneMuteButton.setToggleState (false, juce::dontSendNotification);
@@ -1125,7 +1176,7 @@ private:
         laneLanguageSelector.setText (lane.language, juce::dontSendNotification);
         laneGainSlider.setValue (lane.gain, juce::dontSendNotification);
         laneMuteButton.setToggleState (lane.muted, juce::dontSendNotification);
-        laneCodeEditor.setText (lane.code, juce::dontSendNotification);
+        setLaneCodeText (lane.code);
 
         laneNameEditor.setEnabled (true);
         laneCodeEditor.setEnabled (true);
@@ -1667,7 +1718,7 @@ private:
 
         stateObject->setProperty ("durationBeats", value);
         showProjectSource (root);
-        loadScriptInBackground (script.getText(), "Updating length...", stateIndex + 1, laneSelector.getSelectedId(), transitionSelector.getSelectedId());
+        loadScriptInBackground (getScriptText(), "Updating length...", stateIndex + 1, laneSelector.getSelectedId(), transitionSelector.getSelectedId());
     }
 
     void updateTempo (float value)
@@ -1683,7 +1734,7 @@ private:
         auto selectedState = stateSelector.getSelectedId();
         auto selectedLane = laneSelector.getSelectedId();
         auto selectedTransition = transitionSelector.getSelectedId();
-        loadScriptInBackground (script.getText(), "Updating tempo...", selectedState, selectedLane, selectedTransition);
+        loadScriptInBackground (getScriptText(), "Updating tempo...", selectedState, selectedLane, selectedTransition);
     }
 
     void addStateToScript()
@@ -1742,7 +1793,7 @@ private:
         states->add (state);
 
         showProjectSource (root);
-        loadScriptInBackground (script.getText(), "Adding part...", states->size(), 1, 1);
+        loadScriptInBackground (getScriptText(), "Adding part...", states->size(), 1, 1);
     }
 
     void duplicateSelectedState()
@@ -1904,7 +1955,7 @@ private:
         lanes->add (lane);
 
         showProjectSource (root);
-        loadScriptInBackground (script.getText(), "Adding instrument...", stateIndex + 1, lanes->size(), transitionSelector.getSelectedId());
+        loadScriptInBackground (getScriptText(), "Adding instrument...", stateIndex + 1, lanes->size(), transitionSelector.getSelectedId());
     }
 
     void applySelectedLaneEdits()
@@ -1956,7 +2007,7 @@ private:
         laneObject->setProperty ("language", language);
         laneObject->setProperty ("gain", laneGainSlider.getValue());
         laneObject->setProperty ("muted", laneMuteButton.getToggleState());
-        laneObject->setProperty ("code", laneCodeEditor.getText());
+        laneObject->setProperty ("code", getLaneCodeText());
 
         if (language == "faust" && ! laneObject->getProperty ("params").isObject())
         {
@@ -2018,7 +2069,7 @@ private:
         if (stateIndex < 0 || laneIndex < 0)
             return;
 
-        loadScriptInBackground (script.getText(), "Refreshing sound...", stateIndex + 1, laneIndex + 1, transitionSelector.getSelectedId());
+        loadScriptInBackground (getScriptText(), "Refreshing sound...", stateIndex + 1, laneIndex + 1, transitionSelector.getSelectedId());
     }
 
     void deleteSelectedLane()
@@ -2053,8 +2104,8 @@ private:
 
     void reloadScriptAndSelect (const juce::var& root, int stateIndex, int laneIndex, int transitionIndex = -1)
     {
-        script.setText (MarkovEngine::jsonToReadableScript (root), juce::dontSendNotification);
-        loadScriptInBackground (script.getText(),
+        setScriptText (MarkovEngine::jsonToReadableScript (root));
+        loadScriptInBackground (getScriptText(),
                                 "Preparing changes...",
                                 stateIndex + 1,
                                 laneIndex >= 0 ? laneIndex + 1 : 0,
@@ -2277,7 +2328,9 @@ private:
     juce::ComboBox laneLanguageSelector;
     juce::Slider laneGainSlider;
     juce::ToggleButton laneMuteButton;
-    juce::TextEditor laneCodeEditor;
+    juce::CodeDocument laneCodeDocument;
+    juce::CPlusPlusCodeTokeniser laneCodeTokeniser;
+    juce::CodeEditorComponent laneCodeEditor;
     juce::ComboBox parameterSelector;
     juce::Slider parameterSlider;
     juce::ComboBox transitionSelector;
@@ -2286,7 +2339,9 @@ private:
     juce::Slider durationSlider;
     juce::Slider tempoSlider;
     juce::TextEditor laneInspector;
-    juce::TextEditor script;
+    juce::CodeDocument scriptDocument;
+    juce::CPlusPlusCodeTokeniser scriptTokeniser;
+    juce::CodeEditorComponent scriptEditor;
     juce::TextButton applyButton;
     juce::TextButton demoButton;
     juce::TextButton transportButton;
