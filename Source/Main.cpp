@@ -130,7 +130,9 @@ public:
         auto left = bounds.removeFromLeft (360).reduced (14);
         status.setBounds (left.removeFromTop (70));
         left.removeFromTop (10);
-        stateMap.setBounds (left.removeFromTop (260));
+        mapLabel.setBounds (left.removeFromTop (22));
+        left.removeFromTop (4);
+        stateMap.setBounds (left.removeFromTop (236));
         left.removeFromTop (10);
         stateSelector.setBounds (left.removeFromTop (32));
         left.removeFromTop (8);
@@ -173,10 +175,14 @@ public:
         left.removeFromTop (12);
         tempoSlider.setBounds (left.removeFromTop (34));
         left.removeFromTop (10);
+        inspectorLabel.setBounds (left.removeFromTop (22));
+        left.removeFromTop (4);
         laneInspector.setBounds (left);
 
         auto editorArea = bounds.withTrimmedLeft (14).reduced (14);
-        auto laneEditArea = editorArea.removeFromTop (270);
+        auto laneEditArea = editorArea.removeFromTop (juce::jmax (260, editorArea.getHeight() / 2));
+        laneCodeLabel.setBounds (laneEditArea.removeFromTop (24));
+        laneEditArea.removeFromTop (6);
         auto laneEditHeader = laneEditArea.removeFromTop (34);
         laneNameEditor.setBounds (laneEditHeader.removeFromLeft (190));
         laneEditHeader.removeFromLeft (8);
@@ -195,7 +201,9 @@ public:
         deleteLaneButton.setBounds (laneEditHeader.removeFromLeft (82));
         laneEditArea.removeFromTop (8);
         laneCodeEditor.setBounds (laneEditArea);
-        editorArea.removeFromTop (12);
+        editorArea.removeFromTop (14);
+        songScriptLabel.setBounds (editorArea.removeFromTop (24));
+        editorArea.removeFromTop (6);
         script.setBounds (editorArea);
         updatePresentationMode();
     }
@@ -266,6 +274,7 @@ private:
         configureTextEditor (laneNameEditor, "Instrument name");
         configureSlider (laneGainSlider, 0.0, 1.5, 0.01);
         configureTextEditor (laneCodeEditor, "Sound code", true, false, true);
+        configureCodeEditor (laneCodeEditor);
     }
 
     void configurePerformanceControls()
@@ -284,6 +293,11 @@ private:
     {
         configureTextEditor (laneInspector, {}, true, true, false);
         configureTextEditor (script, {}, true, false, true);
+        configureCodeEditor (script);
+        configureSectionLabel (mapLabel, "Map");
+        configureSectionLabel (inspectorLabel, "Runtime");
+        configureSectionLabel (laneCodeLabel, "Lane Code");
+        configureSectionLabel (songScriptLabel, "Song Code");
         script.setText (MarkovEngine::makeDemoScript());
     }
 
@@ -389,6 +403,26 @@ private:
         addAndMakeVisible (editor);
     }
 
+    void configureCodeEditor (juce::TextEditor& editor)
+    {
+        editor.setFont (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 15.0f, juce::Font::plain));
+        editor.setIndents (12, 10);
+        editor.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff0d1116));
+        editor.setColour (juce::TextEditor::outlineColourId, juce::Colour (0xff33404a));
+        editor.setColour (juce::TextEditor::focusedOutlineColourId, juce::Colour (0xff6fb4dc));
+        editor.setColour (juce::TextEditor::highlightColourId, juce::Colour (0x663a7fa2));
+        editor.setColour (juce::CaretComponent::caretColourId, juce::Colour (0xffeacb64));
+    }
+
+    void configureSectionLabel (juce::Label& label, const juce::String& text)
+    {
+        label.setText (text, juce::dontSendNotification);
+        label.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        label.setJustificationType (juce::Justification::centredLeft);
+        label.setColour (juce::Label::textColourId, juce::Colour (0xffaeb9c3));
+        addAndMakeVisible (label);
+    }
+
     static void addComboItems (juce::ComboBox& comboBox, std::initializer_list<const char*> items)
     {
         for (auto* item : items)
@@ -411,6 +445,7 @@ private:
                  &laneNameEditor, &laneGainSlider, &laneMuteButton, &laneCodeEditor,
                  &transitionSelector, &transitionTargetSelector, &transitionWeightSlider,
                  &durationSlider, &tempoSlider, &script,
+                 &mapLabel, &inspectorLabel, &laneCodeLabel, &songScriptLabel,
                  &applyButton, &demoButton, &addStateButton, &addLaneButton,
                  &applyLaneButton, &duplicateLaneButton, &deleteLaneButton,
                  &applyStateButton, &addTransitionButton, &deleteTransitionButton,
@@ -2225,6 +2260,10 @@ private:
     MarkovEngine engine;
     juce::CriticalSection audioLock;
     juce::Label title;
+    juce::Label mapLabel;
+    juce::Label inspectorLabel;
+    juce::Label laneCodeLabel;
+    juce::Label songScriptLabel;
     juce::TextEditor status;
     StateMapComponent stateMap;
     juce::ComboBox stateSelector;
